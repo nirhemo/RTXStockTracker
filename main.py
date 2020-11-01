@@ -42,11 +42,11 @@ async def getStock():
     t = int(round(time.time() * 1000))
 
     urls = {
-        f"3070-={bestBuyBaseUrl}&{bbModelStub(Model='3070')}&t={t}",
+        f"3070-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3070')}&t={t}",
         f"3070-=https://www.newegg.com/p/pl?N=100007709%20601357250&PageSize=96&t={t}",
-        f"3080-={bestBuyBaseUrl}&{bbModelStub(Model='3080')}&t={t}",
+        f"3080-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3080')}&t={t}",
         f"3080-=https://www.newegg.com/p/pl?N=100007709%20601357247&PageSize=96&t={t}",
-        f"3090-={bestBuyBaseUrl}&{bbModelStub(Model='3090')}&t={t}",
+        f"3090-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3090')}&t={t}",
         f"3090-=https://www.newegg.com/p/pl?N=100007709%20601357248&PageSize=96&t={t}",
     }
     s = AsyncHTMLSession()
