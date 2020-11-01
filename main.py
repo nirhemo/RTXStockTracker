@@ -1,6 +1,7 @@
 from API import API
 from Card import Card
 from requests_html import AsyncHTMLSession
+from string import Template
 import asyncio
 import time
 import tweepy
@@ -8,11 +9,11 @@ import tweepy
 cardSet = {}
 tweepyEnabled = True
 
-def notifyDifference(card, originalText):
+def notifyDifference(model, card, originalText):
     api = API()
 
     print("#######################################")
-    print("            3080 STOCK ALERT           ")
+    print(f"            {model} STOCK ALERT           ")
     print(f"Button has changed from {originalText} to {card.getButtonText()} for {card.getName()}.")
     print(f"Please visit {card.getUrl()} for more information.")
     print("#######################################")
@@ -25,7 +26,7 @@ def notifyDifference(card, originalText):
 
         api = tweepy.API(auth)
 
-        tweet = "3080 STOCK ALERT\n\n"
+        tweet = f"{model} STOCK ALERT\n\n"
         tweet += f"{card.getName()[0:50]}...\n"
         tweet += f"{originalText} -> {card.getButtonText()}\n\n"
         tweet += f"Visit {card.getUrl()} for more info."
@@ -33,23 +34,34 @@ def notifyDifference(card, originalText):
         api.update_status(tweet)
 
 async def getStock():
+    bestBuyBaseUrl = "https://www.bestbuy.com/site/computer-cards-components/video-graphics-cards/abcat0507002.c?id=abcat0507002"
+    bbModelStub = Template("qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
+
+    # Get the current time and append to the end of the url just to add some minor difference
+    # between scrapes.
+    t = int(round(time.time() * 1000))
+
     urls = {
-        "https://www.bestbuy.com/site/searchpage.jsp?st=rtx+3080",
-        "https://www.newegg.com/p/pl?N=100007709%20601357247"
+        f"3070-={bestBuyBaseUrl}&{bbModelStub(Model='3070')}&t={t}",
+        f"3070-=https://www.newegg.com/p/pl?N=100007709%20601357250&PageSize=96&t={t}",
+        f"3080-={bestBuyBaseUrl}&{bbModelStub(Model='3080')}&t={t}",
+        f"3080-=https://www.newegg.com/p/pl?N=100007709%20601357247&PageSize=96&t={t}",
+        f"3090-={bestBuyBaseUrl}&{bbModelStub(Model='3090')}&t={t}",
+        f"3090-=https://www.newegg.com/p/pl?N=100007709%20601357248&PageSize=96&t={t}",
     }
     s = AsyncHTMLSession()
 
-    tasks = (parseUrl(s, url) for url in urls)
+    tasks = (parseUrl(s, url.split("-=")[1], url.split("-=")[0]) for url in urls)
 
     return await asyncio.gather(*tasks)
 
-async def parseUrl(s, url):
+async def parseUrl(s, url, model):
     if "bestbuy" in url:
-        await parseBBUrl(s, url)
+        await parseBBUrl(s, url, model)
     if "newegg" in url:
-        await parseNEUrl(s, url)
+        await parseNEUrl(s, url, model)
 
-async def parseBBUrl(s, url):
+async def parseBBUrl(s, url, model):
     r = await s.get(url)
     cards = r.html.find('.right-column')
 
@@ -66,12 +78,12 @@ async def parseBBUrl(s, url):
         if cardId in cardSet:
             if cardSet[cardId].getButtonText() != stockButton.text:
                 originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = Card(headerText, cardUrl, stockButton.text)
+                cardSet[cardId] = Card(model, headerText, cardUrl, stockButton.text)
                 notifyDifference(cardSet[cardId], originalText)
         else:
             cardSet[cardId] = card
 
-async def parseNEUrl(s, url):
+async def parseNEUrl(s, url, model):
     r = await s.get(url)
     cards = r.html.find('.item-cell')
 
@@ -87,7 +99,7 @@ async def parseNEUrl(s, url):
         if cardId in cardSet:
             if cardSet[cardId].getButtonText() != stockButton.text:
                 originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = Card(headerText, cardUrl, stockButton.text)
+                cardSet[cardId] = Card(model, headerText, cardUrl, stockButton.text)
                 notifyDifference(cardSet[cardId], originalText)
         else:
             cardSet[cardId] = card
