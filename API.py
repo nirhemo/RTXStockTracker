@@ -35,9 +35,6 @@ class API:
     def getAPISecret(self):
         return self.API_SECRET
 
-    def getAPIBearer(self):
-        return self.API_BEARER
-
     def getAccessToken(self):
         return self.ACCESS_TOKEN
 
