@@ -83,7 +83,7 @@ async def parseBBUrl(s, url, model):
         if cardId in cardSet:
             if cardSet[cardId].getButtonText() != stockButton.text:
                 originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = Card(model, headerText, cardUrl, stockButton.text)
+                cardSet[cardId] = card
                 notifyDifference(model, price, cardSet[cardId], originalText)
         else:
             cardSet[cardId] = card
@@ -111,7 +111,7 @@ async def parseNEUrl(s, url, model):
         if cardId in cardSet:
             if cardSet[cardId].getButtonText() != stockButton.text:
                 originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = Card(model, headerText, cardUrl, stockButton.text)
+                cardSet[cardId] = card
                 notifyDifference(model, price, cardSet[cardId], originalText)
         else:
             cardSet[cardId] = card
