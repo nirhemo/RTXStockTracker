@@ -7,14 +7,17 @@ import random
 import time
 import tweepy
 
+# Init card dictionary and turn tweeting on/off
 cardSet = {}
 tweepyEnabled = True
 
+# Print alert, tweet it if enabled.
 def notifyDifference(model, price, card, originalText):
     api = API()
 
     print("#######################################")
     print(f"            {model} STOCK ALERT           ")
+    print(f"           {time.ctime()}")
     print(f"Button has changed from {originalText} to {card.getButtonText()} for {card.getName()}.")
     print(f"It's currently for sale at {price}.")
     print(f"Please visit {card.getUrl()} for more information.")
@@ -34,8 +37,14 @@ def notifyDifference(model, price, card, originalText):
         tweet += f"{originalText} -> {card.getButtonText()}\n\n"
         tweet += f"Visit {card.getUrl()} for more info."
 
-        api.update_status(tweet)
+        try:
+            api.update_status(tweet)
+        except tweepy.error.TweepError as te:
+            if te.api_code == 187:
+                # duplicate tweet
+                pass
 
+# Build list of URLs to check
 async def getStock():
     bestBuyBaseUrl = "https://www.bestbuy.com/site/computer-cards-components/video-graphics-cards/abcat0507002.c?id=abcat0507002"
     bbModelStub = Template("qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
@@ -58,6 +67,7 @@ async def getStock():
 
     return await asyncio.gather(*tasks)
 
+# Determine whether or not to parse Best Buy or NewEgg.
 async def parseUrl(s, url, model):
     if "bestbuy" in url:
         await parseBBUrl(s, url, model)
@@ -66,6 +76,7 @@ async def parseUrl(s, url, model):
 
 async def parseBBUrl(s, url, model):
     r = await s.get(url)
+    # Narrow HTML search down using HTML class selectors.
     cards = r.html.find('.right-column')
 
     for card in cards:
@@ -96,9 +107,12 @@ async def parseNEUrl(s, url, model):
         header = card.find('.item-info', first=True)
         priceParent = card.find('.price-current', first=True)
 
+        # NewEgg sometimes adjusts the location of its prices. This will
+        # get it in the vast majority of situations.
         try:
             price = f"{priceParent.text.split('.')[0]}.{priceParent.text.split('.')[1][0:2]}"
         except:
+            # If the price can't be gathered, just set it to 'unknown' for now.
             price = "Unknown"
 
         stockButton = card.find('.item-button-area', first=True).find('.btn', first=True)
@@ -117,8 +131,13 @@ async def parseNEUrl(s, url, model):
             cardSet[cardId] = card
 
 if __name__ == '__main__':
-    print("Checking Stock...")
+    print(f"{time.ctime()} ::: Checking Stock...")
 
     while True:
-        asyncio.run(getStock())
+        try:
+            asyncio.run(getStock())
+        except Exception as e:
+            if "SSLError" in type(e).__name__:
+                # SSL Error. Wait 20-30 seconds and try again.
+                print(f"{time.ctime()} ::: {type(e).__name__} error. Retrying in 20-30 seconds...")
         time.sleep(random.randint(20, 30))
