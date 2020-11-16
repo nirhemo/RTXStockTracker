@@ -3,39 +3,45 @@ from Card import Card
 from requests_html import AsyncHTMLSession
 from string import Template
 import asyncio
+import datetime
 import random
+import shelve
+import sys
 import time
 import tweepy
+import Util
 
-# Init card dictionary and turn tweeting on/off
-cardSet = {}
-tweepyEnabled = True
+# Init global temp dict.
+global card_set
 
 # Print alert, tweet it if enabled.
-def notifyDifference(model, price, card, originalText):
+def notify_difference(card, original_text):
     api = API()
 
     print("#######################################")
-    print(f"            {model} STOCK ALERT           ")
+    print(f"            {card.get_model()} STOCK ALERT           ")
     print(f"           {time.ctime()}")
-    print(f"Button has changed from {originalText} to {card.getButtonText()} for {card.getName()}.")
-    print(f"It's currently for sale at {price}.")
-    print(f"Please visit {card.getUrl()} for more information.")
+    print(f"Button has changed from {original_text} to {card.get_button_text()} for {card.get_name()}.")
+    if "newegg" in card.get_url():
+        print(f"Add it to your cart: https://secure.newegg.com/Shopping/AddToCart.aspx?ItemList={card.get_item_id()}&Submit=ADD&target=NEWEGGCART\n\n")
+    print(f"Current price: {card.get_price()}.")
+    print(f"Please visit {card.get_url()} for more information.")
     print("#######################################")
     print("")
     print("")
 
-    if tweepyEnabled:
-        auth = tweepy.OAuthHandler(api.getAPIKey(), api.getAPISecret())
-        auth.set_access_token(api.getAccessToken(), api.getAccessTokenSecret())
+    if Util.get_tweepy_enabled():
+        auth = tweepy.OAuthHandler(api.get_api_key(), api.get_api_secret())
+        auth.set_access_token(api.get_access_token(), api.get_access_token_secret())
 
         api = tweepy.API(auth)
 
-        tweet = f"{model} STOCK ALERT\n\n"
-        tweet += f"{card.getName()[0:50]}...\n"
-        tweet += f"Selling for {price}.\n\n"
-        tweet += f"{originalText} -> {card.getButtonText()}\n\n"
-        tweet += f"Visit {card.getUrl()} for more info."
+        tweet = f"{card.get_model()} STOCK ALERT\n\n"
+        tweet += f"{card.get_name()[0:50]}...\n"
+        tweet += f"Selling for {card.get_price()}.\n\n"
+        if "newegg" in card.get_url():
+            tweet += f"Add it to your cart: https://secure.newegg.com/Shopping/AddToCart.aspx?ItemList={card.get_item_id()}&Submit=ADD&target=NEWEGGCART\n\n"
+        tweet += f"Visit {card.get_url()} for more info."
 
         try:
             api.update_status(tweet)
@@ -45,99 +51,85 @@ def notifyDifference(model, price, card, originalText):
                 pass
 
 # Build list of URLs to check
-async def getStock():
-    bestBuyBaseUrl = "https://www.bestbuy.com/site/computer-cards-components/video-graphics-cards/abcat0507002.c?id=abcat0507002"
-    bbModelStub = Template("qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
+async def get_stock():
+    bestbuy_base_url = "https://www.bestbuy.com/site/computer-cards-components/video-graphics-cards/abcat0507002.c?id=abcat0507002"
+    bestbuy_model_stub = Template("qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
 
     # Get the current time and append to the end of the url just to add some minor difference
     # between scrapes.
     t = int(round(time.time() * 1000))
 
     urls = {
-        f"3070-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3070')}&t={t}",
+        f"3070-={bestbuy_base_url}&{bestbuy_model_stub.substitute(Model='3070')}&t={t}",
         f"3070-=https://www.newegg.com/p/pl?N=100007709%20601357250&PageSize=96&t={t}",
-        f"3080-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3080')}&t={t}",
+        f"3080-={bestbuy_base_url}&{bestbuy_model_stub.substitute(Model='3080')}&t={t}",
         f"3080-=https://www.newegg.com/p/pl?N=100007709%20601357247&PageSize=96&t={t}",
-        f"3090-={bestBuyBaseUrl}&{bbModelStub.substitute(Model='3090')}&t={t}",
-        f"3090-=https://www.newegg.com/p/pl?N=100007709%20601357248&PageSize=96&t={t}",
+        f"3090-={bestbuy_base_url}&{bestbuy_model_stub.substitute(Model='3090')}&t={t}",
+        f"3090-=https://www.newegg.com/p/pl?N=100007709%20601357248&PageSize=96&t={t}"
     }
     s = AsyncHTMLSession()
 
-    tasks = (parseUrl(s, url.split("-=")[1], url.split("-=")[0]) for url in urls)
+    tasks = (parse_url(s, url.split("-=")[1], url.split("-=")[0]) for url in urls)
 
     return await asyncio.gather(*tasks)
 
 # Determine whether or not to parse Best Buy or NewEgg.
-async def parseUrl(s, url, model):
+async def parse_url(s, url, model):
     if "bestbuy" in url:
-        await parseBBUrl(s, url, model)
+        await parse_bestbuy_url(s, url, model)
     if "newegg" in url:
-        await parseNEUrl(s, url, model)
+        await parse_newegg_url(s, url, model)
 
-async def parseBBUrl(s, url, model):
-    r = await s.get(url)
+async def parse_bestbuy_url(s, url, model):
     # Narrow HTML search down using HTML class selectors.
+    r = await s.get(url)
     cards = r.html.find('.right-column')
 
-    for card in cards:
-        header = card.find('.sku-header', first=True)
-        priceParent = card.find('.priceView-customer-price', first=True)
-        price = priceParent.find('span', first=True).text
+    for item in cards:      
+        card = Card.create_from_bestbuy(item, model)
 
-        stockButton = card.find('.sku-list-item-button', first=True).find('.btn', first=True)
-        headerText = header.text
-        cardUrl = f"https://www.bestbuy.com{header.find('a', first=True).attrs['href']}"
-        cardId = "bb_" + cardUrl.split("skuId=")[1]
+        if card is not None:
+            card_id = card.get_item_id()
+            if card_id in card_set.keys():
+                if card_set[card_id].get_button_text() != card.get_button_text():
+                    original_text = card_set[card_id].get_button_text()
+                    if card.is_in_stock():
+                        notify_difference(card, original_text)
 
-        card = Card(model, price, headerText, cardUrl, stockButton.text)
+            card_set[card_id] = card
 
-        if cardId in cardSet:
-            if cardSet[cardId].getButtonText() != stockButton.text:
-                originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = card
-                notifyDifference(model, price, cardSet[cardId], originalText)
-        else:
-            cardSet[cardId] = card
-
-async def parseNEUrl(s, url, model):
+async def parse_newegg_url(s, url, model):
     r = await s.get(url)
     cards = r.html.find('.item-cell')
 
-    for card in cards:
-        header = card.find('.item-info', first=True)
-        priceParent = card.find('.price-current', first=True)
+    for item in cards:
+        card = Card.create_from_newegg(item, model)
 
-        # NewEgg sometimes adjusts the location of its prices. This will
-        # get it in the vast majority of situations.
-        try:
-            price = f"{priceParent.text.split('.')[0]}.{priceParent.text.split('.')[1][0:2]}"
-        except:
-            # If the price can't be gathered, just set it to 'unknown' for now.
-            price = "Unknown"
+        if card is not None:
+            card_id = card.get_item_id()
+            if card_id in card_set.keys():
+                if card_set[card_id].get_button_text() != card.get_button_text():
+                    original_text = card_set[card_id].get_button_text()
+                    if card.is_in_stock():
+                        notify_difference(card, original_text)
 
-        stockButton = card.find('.item-button-area', first=True).find('.btn', first=True)
-        headerText = header.text
-        cardUrl = card.find('.item-container', first=True).find('a', first=True).attrs['href']
-        cardId = "ne_" + cardUrl.split("/p/")[1].split("?")[0]
-
-        card = Card(model, price, headerText, cardUrl, stockButton.text)
-
-        if cardId in cardSet:
-            if cardSet[cardId].getButtonText() != stockButton.text:
-                originalText = cardSet[cardId].getButtonText()
-                cardSet[cardId] = card
-                notifyDifference(model, price, cardSet[cardId], originalText)
-        else:
-            cardSet[cardId] = card
+            card_set[card_id] = card
 
 if __name__ == '__main__':
     print(f"{time.ctime()} ::: Checking Stock...")
+    Util.clear_card_shelf()
 
     while True:
+        card_set = Util.get_card_dict()
+
         try:
-            asyncio.run(getStock())
+            asyncio.run(get_stock())
         except Exception as e:
             if "SSLError" in type(e).__name__:
-                # SSL Error. Wait 20-30 seconds and try again.
-                print(f"{time.ctime()} ::: {type(e).__name__} error. Retrying in 20-30 seconds...")
-        time.sleep(random.randint(20, 30))
+                # SSL Error. Wait 10-30 seconds and try again.
+                print(f"{time.ctime()} ::: {type(e).__name__} error. Retrying in 10-30 seconds...")
+            else:
+                print(f"{type(e).__name__} Exception: {str(e)}")
+        
+        Util.set_card_shelf(card_set)
+        time.sleep(random.randint(10, 30))
