@@ -29,14 +29,14 @@ class API:
             print("No API bearer found. Please set one in the config file.")
             sys.exit(0)
 
-    def getAPIKey(self):
+    def get_api_key(self):
         return self.API_KEY
 
-    def getAPISecret(self):
+    def get_api_secret(self):
         return self.API_SECRET
 
-    def getAccessToken(self):
+    def get_access_token(self):
         return self.ACCESS_TOKEN
 
-    def getAccessTokenSecret(self):
+    def get_access_token_secret(self):
         return self.ACCESS_TOKEN_SECRET
