@@ -14,6 +14,7 @@ import Util
 # Init global temp dict.
 global card_set
 
+
 # Print alert, tweet it if enabled.
 def notify_difference(card, original_text):
     api = API()
@@ -23,7 +24,8 @@ def notify_difference(card, original_text):
     print(f"           {time.ctime()}")
     print(f"Button has changed from {original_text} to {card.get_button_text()} for {card.get_name()}.")
     if "newegg" in card.get_url():
-        print(f"Add it to your cart: https://secure.newegg.com/Shopping/AddToCart.aspx?ItemList={card.get_item_id()}&Submit=ADD&target=NEWEGGCART\n\n")
+        print(
+            f"Add it to your cart: https://secure.newegg.com/Shopping/AddToCart.aspx?ItemList={card.get_item_id()}&Submit=ADD&target=NEWEGGCART\n\n")
     print(f"Current price: {card.get_price()}.")
     print(f"Please visit {card.get_url()} for more information.")
     print("#######################################")
@@ -50,10 +52,12 @@ def notify_difference(card, original_text):
                 # duplicate tweet
                 pass
 
+
 # Build list of URLs to check
 async def get_stock():
     bestbuy_base_url = "https://www.bestbuy.com/site/computer-cards-components/video-graphics-cards/abcat0507002.c?id=abcat0507002"
-    bestbuy_model_stub = Template("qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
+    bestbuy_model_stub = Template(
+        "qp=gpusv_facet%3DGraphics%20Processing%20Unit%20(GPU)~NVIDIA%20GeForce%20RTX%20$Model")
 
     # Get the current time and append to the end of the url just to add some minor difference
     # between scrapes.
@@ -73,6 +77,7 @@ async def get_stock():
 
     return await asyncio.gather(*tasks)
 
+
 # Determine whether or not to parse Best Buy or NewEgg.
 async def parse_url(s, url, model):
     if "bestbuy" in url:
@@ -80,12 +85,13 @@ async def parse_url(s, url, model):
     if "newegg" in url:
         await parse_newegg_url(s, url, model)
 
+
 async def parse_bestbuy_url(s, url, model):
     # Narrow HTML search down using HTML class selectors.
     r = await s.get(url)
     cards = r.html.find('.right-column')
 
-    for item in cards:      
+    for item in cards:
         card = Card.create_from_bestbuy(item, model)
 
         if card is not None:
@@ -97,6 +103,7 @@ async def parse_bestbuy_url(s, url, model):
                         notify_difference(card, original_text)
 
             card_set[card_id] = card
+
 
 async def parse_newegg_url(s, url, model):
     r = await s.get(url)
@@ -115,6 +122,7 @@ async def parse_newegg_url(s, url, model):
 
             card_set[card_id] = card
 
+
 if __name__ == '__main__':
     print(f"{time.ctime()} ::: Checking Stock...")
     Util.clear_card_shelf()
@@ -126,10 +134,10 @@ if __name__ == '__main__':
             asyncio.run(get_stock())
         except Exception as e:
             if "SSLError" in type(e).__name__:
-                # SSL Error. Wait 10-30 seconds and try again.
+                # SSL Error. Wait 8-15 seconds and try again.
                 print(f"{time.ctime()} ::: {type(e).__name__} error. Retrying in 10-30 seconds...")
             else:
                 print(f"{type(e).__name__} Exception: {str(e)}")
-        
+
         Util.set_card_shelf(card_set)
-        time.sleep(random.randint(10, 30))
+        time.sleep(random.randint(8, 15))
