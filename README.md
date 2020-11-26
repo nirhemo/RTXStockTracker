@@ -1,6 +1,6 @@
 # Follow this bot on twitter:
 
-https://twitter.com/_RTXBot_
+[https://twitter.com/_RTXBot_](https://twitter.com/_RTXBot_)
 
 Want to help make this bot better? Give it a fork. I welcome all help!
 
