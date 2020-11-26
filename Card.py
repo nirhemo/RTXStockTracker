@@ -36,7 +36,12 @@ class Card:
         }
 
         return founders_price[self.model]
-    
+
+    def is_way_overpriced(self, price):
+        price_as_float = float(''.join(d for d in price if d.isdigit() or d == '.'))
+        return abs(price_as_float - self.get_founders_price()) > 300
+
+
     def create_from_bestbuy(html, model):
         header = html.find('.sku-header', first=True)
         price_parent = html.find('.priceView-customer-price', first=True)
@@ -47,13 +52,12 @@ class Card:
         card_url = f"https://www.bestbuy.com{header.find('a', first=True).attrs['href']}"
         card_id = card_url.split("skuId=")[1]
 
-        new_card = Card(model, price, card_id, header_text, card_url, stock_button.text)    
+        new_card = Card(model, price, card_id, header_text, card_url, stock_button.text)
 
         # Check price. Make sure it's within at least $300 of the FE price.
-        price_as_float = float(''.join(d for d in price if d.isdigit() or d == '.'))
-        if abs(price_as_float - new_card.get_founders_price()) > 300:
+        if new_card.is_way_overpriced(price):
             return None
-        
+
         return new_card
 
     def create_from_newegg(html, model):
@@ -80,13 +84,12 @@ class Card:
 
         if "item_id" not in locals():
             return None
-            
+
         new_card = Card(model, price, item_id, name.text, card_url, stock_button.text)
 
         # Check price. Make sure it's within at least $300 of the FE price.
         if "Unknown" not in price:
-            price_as_float = float(''.join(d for d in price if d.isdigit() or d == '.'))
-            if abs(price_as_float - new_card.get_founders_price()) > 300:
+            if new_card.is_way_overpriced(price):
                 return None
-        
+
         return new_card
